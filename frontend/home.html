@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home - Crochet Arty</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="js/api.js"></script>
+  <script defer src="js/main.js"></script>
+</head>
+<body class="bg-gradient min-h-screen flex flex-col">
+  <nav class="navbar">
+    <span class="logo">Crochet Arty</span>
+    <div class="nav-links">
+      <a href="cart.html">Cart <span id="cartSummary" class="cart-count">0</span></a>
+      <a href="wishlist.html">Wishlist</a>
+      <a href="orders.html">Orders</a>
+      <a href="profile.html" id="profileLink" style="display: none;">Profile</a>
+      <a href="dashboard.html" id="dashboardLink" style="display: none;">Dashboard</a>
+      <a href="#" id="logoutLink" class="logout">Logout</a>
+    </div>
+  </nav>
+  <main class="main-content">
+    <div class="search-bar-top">
+      <input id="searchBar" type="text" placeholder="Search for crafts, e.g. 'paintings'..." class="search-bar" />
+      <select id="sortFilter" class="sort-filter">
+        <option value="az">A-Z</option>
+        <option value="za">Z-A</option>
+        <option value="pricehl">Price: High to Low</option>
+        <option value="pricelh">Price: Low to High</option>
+      </select>
+    </div>
+    <div class="categories-bar">
+      <button class="category-btn active" data-category="All">All</button>
+      <button class="category-btn" data-category="Crochet Arts">Crochet Arts</button>
+      <button class="category-btn" data-category="Handmade Decors">Handmade Decors</button>
+      <button class="category-btn" data-category="Dresses">Dresses</button>
+      <button class="category-btn" data-category="Handmade Toys">Handmade Toys</button>
+      <button class="category-btn" data-category="Abstract Arts">Abstract Arts</button>
+      <button class="category-btn" data-category="Paintings">Paintings</button>
+    </div>
+    <h1 class="section-title">Featured Products</h1>
+    <div id="productGrid" class="product-grid">
+      <!-- Product cards will be injected here by JS -->
+    </div>
+    <div id="pagination" class="pagination-container">
+      <!-- Pagination will be injected here by JS -->
+    </div>
+  </main>
+  <footer class="footer">&copy; 2024 Crochet Arty. All rights reserved.</footer>
+  
+  <script>
+    // Initialize navigation based on authentication status
+    document.addEventListener('DOMContentLoaded', function() {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const profileLink = document.getElementById('profileLink');
+      const dashboardLink = document.getElementById('dashboardLink');
+      const logoutLink = document.getElementById('logoutLink');
+      
+      if (user.id) {
+        profileLink.style.display = 'inline';
+        if (user.role === 'artisan' || user.role === 'admin') {
+          dashboardLink.style.display = 'inline';
+        }
+      }
+      
+      // Logout functionality
+      logoutLink.addEventListener('click', async function(e) {
+        e.preventDefault();
+        try {
+          await API.auth.logout();
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
+      });
+    });
+  </script>
+</body>
+</html> 

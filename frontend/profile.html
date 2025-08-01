@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile - Crochet Arty</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="js/api.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!window.API || !API.helpers.isAuthenticated()) {
+        document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Please login to view your profile</h2><a href="login.html" class="btn btn-primary">Login</a></div>';
+      }
+    });
+  </script>
+</head>
+<body class="bg-gradient min-h-screen flex flex-col">
+  <nav class="navbar">
+    <span class="logo">Crochet Arty</span>
+    <div class="nav-links">
+      <a href="home.html">Home</a>
+      <a href="cart.html">Cart</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="index.html" class="logout">Logout</a>
+    </div>
+  </nav>
+  <main class="main-content profile-main">
+    <h1 class="section-title">My Profile</h1>
+    <section class="profile-section">
+      <h2 class="profile-title">User Information <button id="editUserBtn" class="btn btn-outline btn-sm">Edit</button></h2>
+      <div class="profile-info" id="userInfo"></div>
+    </section>
+    <section class="profile-section">
+      <h2 class="profile-title">Previous Orders</h2>
+      <div class="order-list" id="orderHistory"></div>
+    </section>
+    <section class="profile-section">
+      <h2 class="profile-title">Current Order Status</h2>
+      <div class="order-list" id="currentOrders"></div>
+    </section>
+    <section class="profile-section">
+      <h2 class="profile-title">Transaction History</h2>
+      <div class="order-list" id="transactionHistory"></div>
+    </section>
+    <section class="profile-section">
+      <h2 class="profile-title">My Uploaded Products</h2>
+      <div class="product-grid" id="myProducts"></div>
+      <button id="addProductBtn" class="btn btn-primary">Add Product</button>
+    </section>
+    <section class="profile-section">
+      <h2 class="profile-title">Suggested Products (Discounted)</h2>
+      <div class="product-grid" id="suggestedProducts"></div>
+    </section>
+  </main>
+  <footer class="footer">&copy; 2024 Crochet Arty. All rights reserved.</footer>
+  <!-- Edit User Modal -->
+  <div id="editUserModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <span class="close" id="closeEditUserModal">&times;</span>
+      <h2>Edit User Information</h2>
+      <form id="editUserForm">
+        <label>Name: <input type="text" id="editUserName" required></label><br>
+        <label>Email: <input type="email" id="editUserEmail" required></label><br>
+        <label>Phone: <input type="text" id="editUserPhone"></label><br>
+        <label>Address: <input type="text" id="editUserAddress"></label><br>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </form>
+    </div>
+  </div>
+  <!-- Edit Product Modal (skeleton) -->
+  <div id="editProductModal" class="modal" style="display:none;"></div>
+  <!-- Add Product Modal -->
+  <div id="addProductModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <span class="close" id="closeAddProductModal">&times;</span>
+      <h2>Add New Product</h2>
+      <form id="addProductForm">
+        <label>Title: <input type="text" id="addProdTitle" required></label><br>
+        <label>Price: <input type="number" id="addProdPrice" required></label><br>
+        <label>Image URL: <input type="text" id="addProdImage" required></label><br>
+        <label>Description: <input type="text" id="addProdDesc" required></label><br>
+        <label>Category: <input type="text" id="addProdCategory" required></label><br>
+        <button type="submit" class="btn btn-primary">Add Product</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    async function loadProfileData() {
+      // User Info
+      let user = null;
+      try {
+        const res = await API.auth.getProfile();
+        if (res.success && res.data && res.data.user) {
+          user = res.data.user;
+          localStorage.setItem('user', JSON.stringify(user));
+        } else {
+          user = JSON.parse(localStorage.getItem('user')) || {};
+        }
+      } catch (e) {
+        user = JSON.parse(localStorage.getItem('user')) || {};
+      }
+      const knots = parseInt(localStorage.getItem('knots') || '0');
+      document.getElementById('userInfo').innerHTML = `
+        <div><strong>Name:</strong> ${user.name || ''}</div>
+        <div><strong>Email:</strong> ${user.email || ''}</div>
+        <div><strong>Phone:</strong> ${user.phone || 'Not set'}</div>
+        <div><strong>Address:</strong> ${(user.address && user.address.street) ? user.address.street : (localStorage.getItem('userAddress') || 'Not set')}</div>
+        <div><strong>Knots Balance:</strong> <span style="color:var(--secondary);font-weight:bold;">${knots} knots</span> (25 knots = ₹10)</div>
+      `;
+
+      // Orders (assume API.cart.getCartSummary returns order info)
+      let orders = [];
+      try {
+        const res = await API.cart.getCartSummary();
+        if (res.success && res.data && res.data.orders) {
+          orders = res.data.orders;
+          localStorage.setItem('orders', JSON.stringify(orders));
+        } else {
+          orders = JSON.parse(localStorage.getItem('orders') || '[]');
+        }
+      } catch (e) {
+        orders = JSON.parse(localStorage.getItem('orders') || '[]');
+      }
+      document.getElementById('orderHistory').innerHTML = orders.filter(o => o.status === 'Delivered').map(order => `
+        <div class="order-item">
+          <span>Order #${order.id}</span>
+          <span>${order.items.map(i => `${i.name} (x${i.qty})`).join(', ')}</span>
+          <span>Date: ${order.date}</span>
+          <span>Amount: ₹${order.total}</span>
+          <span>Knots Used: ${order.knotsUsed || 0}</span>
+          <span>Knots Earned: ${order.knotsEarned || 0}</span>
+          <span class="order-status">${order.status}</span>
+        </div>
+      `).join('') || '<div class="no-products">No previous orders.</div>';
+      document.getElementById('currentOrders').innerHTML = orders.filter(o => o.status !== 'Delivered').map(order => `
+        <div class="order-item">
+          <span>Order #${order.id}</span>
+          <span>${order.items.map(i => `${i.name} (x${i.qty})`).join(', ')}</span>
+          <span>Date: ${order.date}</span>
+          <span>Amount: ₹${order.total}</span>
+          <span>Knots Used: ${order.knotsUsed || 0}</span>
+          <span>Knots Earned: ${order.knotsEarned || 0}</span>
+          <span class="order-status">${order.status}</span>
+        </div>
+      `).join('') || '<div class="no-products">No current orders.</div>';
+      document.getElementById('transactionHistory').innerHTML = orders.map(order => `
+        <div class="order-item">
+          <span>Order #${order.id}</span>
+          <span>${order.items.map(i => `${i.name} (x${i.qty})`).join(', ')}</span>
+          <span>Date: ${order.date}</span>
+          <span>Amount: ₹${order.total}</span>
+          <span>Knots Used: ${order.knotsUsed || 0}</span>
+          <span>Knots Earned: ${order.knotsEarned || 0}</span>
+          <span class="order-status">${order.status}</span>
+        </div>
+      `).join('') || '<div class="no-products">No transactions yet.</div>';
+
+      // Uploaded products (artisan only)
+      let myProducts = [];
+      if (user.role === 'artisan' || user.role === 'admin') {
+        try {
+          const res = await API.artisan.getArtisanProducts();
+          if (res.success && res.data && res.data.products) {
+            myProducts = res.data.products;
+            localStorage.setItem('artisanProducts', JSON.stringify(myProducts));
+          } else {
+            myProducts = JSON.parse(localStorage.getItem('artisanProducts') || '[]');
+          }
+        } catch (e) {
+          myProducts = JSON.parse(localStorage.getItem('artisanProducts') || '[]');
+        }
+      } else {
+        myProducts = JSON.parse(localStorage.getItem('artisanProducts') || '[]');
+      }
+      document.getElementById('myProducts').innerHTML = myProducts.length ? myProducts.map(product => `
+        <div class="product-card">
+          <img src="${product.images && product.images[0] ? product.images[0] : 'images/placeholder.jpg'}" alt="${product.title}" class="product-img">
+          <div class="product-info">
+            <h2 class="product-title">${product.title}</h2>
+            <p class="product-price">₹${product.price}</p>
+            <p class="product-desc">${product.description}</p>
+            <button class="btn btn-outline btn-sm" onclick="editProduct('${product._id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteProduct('${product._id}')">Delete</button>
+          </div>
+        </div>
+      `).join('') : '<div class="no-products">No products uploaded yet.</div>';
+    }
+    loadProfileData();
+    // Suggested products (discounted)
+    const suggested = [
+      {id: 301, name: 'Colorful Coasters', price: 12, discount: 20, image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80', description: 'Set of 4 vibrant crochet coasters.'},
+      {id: 302, name: 'Abstract Canvas', price: 60, discount: 15, image: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=400&q=80', description: 'Modern abstract art for your wall.'}
+    ];
+    document.getElementById('suggestedProducts').innerHTML = suggested.map(product => `
+      <div class="product-card">
+        <img src="${product.images && product.images[0] ? product.images[0] : (product.image || 'images/placeholder.jpg')}" alt="${product.name}" class="product-img">
+        <div class="product-info">
+          <h2 class="product-title">${product.name}</h2>
+          <p class="product-price">₹${product.price} <span class="discount">-${product.discount}%</span></p>
+          <p class="product-desc">${product.description}</p>
+          <button class="btn btn-primary" onclick="addToCart(${product.id})">Add to Cart</button>
+        </div>
+      </div>
+    `).join('');
+    // Add to cart for suggested
+    function addToCart(id) {
+      let cart = JSON.parse(localStorage.getItem('cart') || '[]');
+      const existing = cart.find(item => item.id === id);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cart.push({ id, qty: 1 });
+      }
+      localStorage.setItem('cart', JSON.stringify(cart));
+      alert('Added to cart!');
+    }
+    window.addToCart = addToCart;
+
+    // Modal logic for editing user info
+    document.getElementById('editUserBtn').onclick = function() {
+      const user = JSON.parse(localStorage.getItem('user')) || {};
+      document.getElementById('editUserName').value = user.name || '';
+      document.getElementById('editUserEmail').value = user.email || '';
+      document.getElementById('editUserPhone').value = user.phone || '';
+      document.getElementById('editUserAddress').value = (user.address && user.address.street) ? user.address.street : '';
+      document.getElementById('editUserModal').style.display = 'block';
+    };
+    document.getElementById('closeEditUserModal').onclick = function() {
+      document.getElementById('editUserModal').style.display = 'none';
+    };
+    document.getElementById('editUserForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const updated = {
+        name: document.getElementById('editUserName').value,
+        email: document.getElementById('editUserEmail').value,
+        phone: document.getElementById('editUserPhone').value,
+        address: document.getElementById('editUserAddress').value // send as string
+      };
+      try {
+        const res = await API.auth.updateProfile(updated);
+        if (res.success) {
+          localStorage.setItem('user', JSON.stringify(res.data.user));
+          loadProfileData();
+          alert('Profile updated!');
+        } else {
+          alert('Failed to update profile.');
+        }
+      } catch (err) {
+        alert('Error updating profile.');
+      }
+      document.getElementById('editUserModal').style.display = 'none';
+    };
+    // Add Product Modal logic
+    document.getElementById('addProductBtn').onclick = function() {
+      document.getElementById('addProductModal').style.display = 'block';
+    };
+    document.getElementById('closeAddProductModal').onclick = function() {
+      document.getElementById('addProductModal').style.display = 'none';
+    };
+    document.getElementById('addProductForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const productData = {
+        title: document.getElementById('addProdTitle').value,
+        price: parseFloat(document.getElementById('addProdPrice').value),
+        images: [document.getElementById('addProdImage').value],
+        description: document.getElementById('addProdDesc').value,
+        category: document.getElementById('addProdCategory').value
+      };
+      try {
+        const res = await API.products.createProduct(productData);
+        if (res.success) {
+          alert('Product added!');
+          document.getElementById('addProductModal').style.display = 'none';
+          loadProfileData();
+        } else {
+          alert('Failed to add product.');
+        }
+      } catch (err) {
+        alert('Error adding product.');
+      }
+    };
+    // Product edit/delete stubs
+    window.editProduct = function(id) {
+      // TODO: Implement product edit modal
+      alert('Edit product: ' + id);
+    };
+    window.deleteProduct = async function(id) {
+      if (confirm('Are you sure you want to delete this product?')) {
+        try {
+          const res = await API.artisan.deleteProduct(id);
+          if (res.success) {
+            alert('Product deleted!');
+            loadProfileData();
+          } else {
+            alert('Failed to delete product.');
+          }
+        } catch (err) {
+          alert('Error deleting product.');
+        }
+      }
+    };
+  </script>
+</body>
+</html>  

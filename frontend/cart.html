@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cart - Crochet Arty</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="js/api.js"></script>
+</head>
+<body class="bg-gradient min-h-screen flex flex-col">
+  <nav class="navbar">
+    <span class="logo">Crochet Arty</span>
+    <div class="nav-links">
+      <a href="home.html">Home</a>
+      <a href="cart.html" class="active">Cart</a>
+      <a href="wishlist.html">Wishlist</a>
+      <a href="orders.html">Orders</a>
+      <a href="profile.html" id="profileNav">Profile</a>
+      <a href="dashboard.html" id="dashboardLink" style="display: none;">Dashboard</a>
+      <a href="#" id="logoutLink" class="logout">Logout</a>
+    </div>
+  </nav>
+  <main class="main-content">
+    <h1 class="section-title">Your Cart</h1>
+    <div id="cartItems" class="cart-items">
+      <div class="loading">Loading cart...</div>
+    </div>
+    <div id="cartSummary" class="cart-summary"></div>
+    <div id="buyModal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <div id="modalStep1" style="display:none;">
+          <h2 class="modal-title">Enter Delivery Address</h2>
+          <textarea id="addressInput" class="modal-input" rows="3" placeholder="Enter your address..."></textarea>
+          <button class="btn btn-primary" id="continueToReturn">Continue</button>
+        </div>
+        <div id="modalStep2" style="display:none;">
+          <h2 class="modal-title">7 Days Return Policy</h2>
+          <p>You are eligible for a 7 days return policy from the date of delivery.</p>
+          <button class="btn btn-primary" id="acceptReturnPolicy">Okay</button>
+        </div>
+        <div id="modalStep3" style="display:none;">
+          <h2 class="modal-title">Order Summary</h2>
+          <div id="orderSummary"></div>
+          <div id="knotsSection"></div>
+          <button class="btn btn-hero" id="placeOrder">Place Order</button>
+        </div>
+      </div>
+    </div>
+    <div id="modalOverlay" class="modal-overlay" style="display:none;"></div>
+  </main>
+  <footer class="footer">&copy; 2024 Crochet Arty. All rights reserved.</footer>
+  
+  <script>
+    let cartData = null;
+
+    // Initialize cart page
+    async function initializeCart() {
+      if (!API.helpers.isAuthenticated()) {
+        showNotification('Please login to view your cart', 'info');
+        return;
+      }
+
+      try {
+        await loadCart();
+        setupEventListeners();
+      } catch (error) {
+        console.error('Failed to initialize cart:', error);
+        showError('Failed to load cart. Please try again.');
+      }
+    }
+
+    // Load cart from API
+    async function loadCart() {
+      try {
+        const response = await API.cart.getCart();
+        
+        if (response.success) {
+          cartData = response.data.cart;
+          renderCart();
+        } else {
+          showError('Failed to load cart.');
+        }
+      } catch (error) {
+        console.error('Load cart error:', error);
+        showError('Failed to load cart. Please try again.');
+      }
+    }
+
+    // Render cart
+    function renderCart() {
+      const itemsDiv = document.getElementById('cartItems');
+      const summaryDiv = document.getElementById('cartSummary');
+      
+      if (!cartData || cartData.items.length === 0) {
+        itemsDiv.innerHTML = '<div class="no-products">Your cart is empty.</div>';
+        summaryDiv.innerHTML = '';
+        return;
+      }
+
+      itemsDiv.innerHTML = '';
+      
+      cartData.items.forEach(item => {
+        const product = item.product;
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'cart-item';
+        itemDiv.innerHTML = `
+          <img src="${product.images && product.images[0] ? product.images[0] : 'images/placeholder.jpg'}" alt="${product.title}" class="cart-item-img">
+          <div class="cart-item-info">
+            <h2 class="product-title">${product.title}</h2>
+            <p class="product-price">${API.helpers.formatPrice(product.price)}</p>
+            <div class="cart-item-actions">
+              <label>Qty:</label>
+              <input type="number" min="1" max="99" value="${item.quantity}" class="cart-qty" 
+                     onchange="updateQuantity('${product._id}', this.value)">
+              <button class="btn btn-outline" onclick="removeFromCart('${product._id}')">Remove</button>
+            </div>
+          </div>
+        `;
+        itemsDiv.appendChild(itemDiv);
+      });
+
+      // Render summary
+      summaryDiv.innerHTML = `
+        <div class="cart-summary-bar">
+          <span class="cart-total-label">Total:</span>
+          <span class="cart-total-value">${API.helpers.formatPrice(cartData.totalAmount)}</span>
+        </div>
+        <div class="cart-actions">
+          <button class="btn btn-primary btn-large" onclick="proceedToCheckout()">Proceed to Checkout</button>
+          <button class="btn btn-outline" onclick="clearCart()">Clear Cart</button>
+        </div>
+      `;
+    }
+
+    // Update quantity
+    async function updateQuantity(productId, quantity) {
+      try {
+        const response = await API.cart.updateCartItem(productId, parseInt(quantity));
+        
+        if (response.success) {
+          cartData = response.data.cart;
+          renderCart();
+        } else {
+          showError('Failed to update quantity.');
+        }
+      } catch (error) {
+        console.error('Update quantity error:', error);
+        showError('Failed to update quantity. Please try again.');
+      }
+    }
+
+    // Remove from cart
+    async function removeFromCart(productId) {
+      try {
+        const response = await API.cart.removeFromCart(productId);
+        
+        if (response.success) {
+          cartData = response.data.cart;
+          renderCart();
+          showSuccess('Item removed from cart.');
+        } else {
+          showError('Failed to remove item.');
+        }
+      } catch (error) {
+        console.error('Remove from cart error:', error);
+        showError('Failed to remove item. Please try again.');
+      }
+    }
+
+    // Clear cart
+    async function clearCart() {
+      if (!confirm('Are you sure you want to clear your cart?')) return;
+      
+      try {
+        const response = await API.cart.clearCart();
+        
+        if (response.success) {
+          cartData = response.data.cart;
+          renderCart();
+          showSuccess('Cart cleared successfully.');
+        } else {
+          showError('Failed to clear cart.');
+        }
+      } catch (error) {
+        console.error('Clear cart error:', error);
+        showError('Failed to clear cart. Please try again.');
+      }
+    }
+
+    // Proceed to checkout
+    function proceedToCheckout() {
+      if (!cartData || cartData.items.length === 0) {
+        showError('Your cart is empty.');
+        return;
+      }
+      
+      window.location.href = 'checkout.html';
+    }
+
+    // Start buy now process (legacy)
+    function startBuyNow() {
+      proceedToCheckout();
+    }
+
+    // Setup event listeners
+    function setupEventListeners() {
+      // Continue to return policy
+      document.getElementById('continueToReturn').addEventListener('click', function() {
+        document.getElementById('modalStep1').style.display = 'none';
+        document.getElementById('modalStep2').style.display = 'block';
+      });
+
+      // Accept return policy
+      document.getElementById('acceptReturnPolicy').addEventListener('click', function() {
+        document.getElementById('modalStep2').style.display = 'none';
+        document.getElementById('modalStep3').style.display = 'block';
+        renderOrderSummary();
+      });
+
+      // Place order
+      document.getElementById('placeOrder').addEventListener('click', function() {
+        placeOrder();
+      });
+
+      // Modal overlay click
+      document.getElementById('modalOverlay').addEventListener('click', function() {
+        closeModal();
+      });
+
+      // Logout
+      document.getElementById('logoutLink').addEventListener('click', async function(e) {
+        e.preventDefault();
+        try {
+          await API.auth.logout();
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
+      });
+
+      // Setup navigation
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const dashboardLink = document.getElementById('dashboardLink');
+      
+      if (user.role === 'artisan' || user.role === 'admin') {
+        dashboardLink.style.display = 'inline';
+      }
+    }
+
+    // Render order summary
+    function renderOrderSummary() {
+      const orderSummary = document.getElementById('orderSummary');
+      const address = document.getElementById('addressInput').value;
+      
+      let summaryHTML = '<div class="order-items">';
+      cartData.items.forEach(item => {
+        summaryHTML += `
+          <div class="order-item">
+            <span>${item.product.title} x ${item.quantity}</span>
+            <span>${API.helpers.formatPrice(item.price * item.quantity)}</span>
+          </div>
+        `;
+      });
+      summaryHTML += '</div>';
+      summaryHTML += `<div class="order-total">Total: ${API.helpers.formatPrice(cartData.totalAmount)}</div>`;
+      summaryHTML += `<div class="order-address">Delivery Address: ${address}</div>`;
+      
+      orderSummary.innerHTML = summaryHTML;
+    }
+
+    // Place order
+    async function placeOrder() {
+      const address = document.getElementById('addressInput').value;
+      if (!address.trim()) {
+        showError('Please enter a delivery address.');
+        return;
+      }
+      try {
+        // Prepare order data
+        const orderData = {
+          items: cartData.items.map(item => ({
+            product: item.product._id,
+            quantity: item.quantity
+          })),
+          address
+        };
+        // Call backend order API
+        const res = await API.orders.createOrder(orderData);
+        if (res.success) {
+          showSuccess('Order placed successfully!');
+          closeModal();
+          // Clear cart after successful order
+          await API.cart.clearCart();
+          cartData = { items: [], totalAmount: 0, totalItems: 0 };
+          renderCart();
+        } else {
+          showError(res.message || 'Failed to place order.');
+        }
+      } catch (error) {
+        console.error('Place order error:', error);
+        showError('Failed to place order. Please try again.');
+      }
+    }
+
+    // Close modal
+    function closeModal() {
+      document.getElementById('buyModal').style.display = 'none';
+      document.getElementById('modalOverlay').style.display = 'none';
+      document.getElementById('modalStep1').style.display = 'none';
+      document.getElementById('modalStep2').style.display = 'none';
+      document.getElementById('modalStep3').style.display = 'none';
+    }
+
+    // Show error message
+    function showError(message) {
+      const notification = document.createElement('div');
+      notification.className = 'notification notification-error';
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.remove();
+      }, 3000);
+    }
+
+    // Show success message
+    function showSuccess(message) {
+      const notification = document.createElement('div');
+      notification.className = 'notification notification-success';
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.remove();
+      }, 3000);
+    }
+
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', initializeCart);
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!window.API || !API.helpers.isAuthenticated()) {
+        console.log('Cart requires authentication - user can login manually');
+      }
+    });
+  </script>
+</body>
+</html> 

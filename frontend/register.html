@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - Crochet Arty</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gradient min-h-screen flex flex-col justify-center items-center">
+  <div class="form-container">
+    <h2 class="form-title">Create Your Account</h2>
+    <form class="form" id="registerForm" novalidate>
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" name="name" required>
+        <div class="form-error" id="nameError"></div>
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required>
+        <div class="form-error" id="emailError"></div>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+        <div class="form-error" id="passwordError"></div>
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" name="phone" required>
+        <div class="form-error" id="phoneError"></div>
+      </div>
+      <div class="form-group">
+        <label for="role">Account Type</label>
+        <select id="role" name="role" required>
+          <option value="">Select account type</option>
+          <option value="customer">Customer - Browse and buy products</option>
+          <option value="artisan">Artisan - Sell your handmade products</option>
+        </select>
+        <div class="form-error" id="roleError"></div>
+      </div>
+      <button type="submit" class="btn btn-hero w-full" id="registerBtn">Register</button>
+      <div id="registerMessage" class="form-message"></div>
+    </form>
+    <p class="form-footer">Already have an account? <a href="login.html">Login</a></p>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const phone = document.getElementById('phone').value.trim();
+      const role = document.getElementById('role').value;
+      const registerBtn = document.getElementById('registerBtn');
+      const registerMessage = document.getElementById('registerMessage');
+      
+      // Clear previous errors
+      document.getElementById('nameError').textContent = '';
+      document.getElementById('emailError').textContent = '';
+      document.getElementById('passwordError').textContent = '';
+      document.getElementById('phoneError').textContent = '';
+      document.getElementById('roleError').textContent = '';
+      registerMessage.innerHTML = '';
+      
+      // Validation
+      let valid = true;
+      
+      if (name.length < 2) {
+        document.getElementById('nameError').textContent = 'Name must be at least 2 characters.';
+        valid = false;
+      }
+      
+      if (!email.includes('@')) {
+        document.getElementById('emailError').textContent = 'Please enter a valid email.';
+        valid = false;
+      }
+      
+      if (password.length < 6) {
+        document.getElementById('passwordError').textContent = 'Password must be at least 6 characters.';
+        valid = false;
+      }
+      
+      if (phone.length < 10) {
+        document.getElementById('phoneError').textContent = 'Please enter a valid phone number.';
+        valid = false;
+      }
+      
+      if (!role) {
+        document.getElementById('roleError').textContent = 'Please select an account type.';
+        valid = false;
+      }
+      
+      if (!valid) return;
+      
+      // Show loading
+      registerBtn.disabled = true;
+      registerBtn.textContent = 'Creating Account...';
+      registerMessage.innerHTML = '<div class="loading">Creating your account...</div>';
+      
+      try {
+        const userData = {
+          name,
+          email,
+          password,
+          phone,
+          role
+        };
+        
+        const response = await API.auth.register(userData);
+        
+        if (response.success) {
+          registerMessage.innerHTML = '<div class="success">Account created successfully! Redirecting to login...</div>';
+          
+          // Redirect to login after 2 seconds
+          setTimeout(() => {
+            window.location.href = 'login.html';
+          }, 2000);
+        } else {
+          registerMessage.innerHTML = `<div class="error">${response.message}</div>`;
+        }
+      } catch (error) {
+        registerMessage.innerHTML = `<div class="error">${error.message || 'Registration failed. Please try again.'}</div>`;
+      } finally {
+        registerBtn.disabled = false;
+        registerBtn.textContent = 'Register';
+      }
+    });
+  </script>
+</body>
+</html> 

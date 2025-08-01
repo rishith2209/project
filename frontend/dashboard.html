@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Crochet Arty</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="js/api.js"></script>
+</head>
+<body class="bg-gradient min-h-screen flex flex-col">
+  <nav class="navbar">
+    <span class="logo">Crochet Arty</span>
+    <div class="nav-links">
+      <a href="home.html">Home</a>
+      <a href="cart.html">Cart</a>
+      <a href="index.html" class="logout">Logout</a>
+    </div>
+  </nav>
+  <main class="main-content dashboard-main">
+    <h1 class="section-title">Artisan Dashboard</h1>
+    <section class="dashboard-section">
+      <h2 class="dashboard-title">Upload New Product</h2>
+      <form id="uploadForm" class="dashboard-form">
+        <input type="text" id="prodTitle" placeholder="Title" required>
+        <input type="number" id="prodPrice" placeholder="Price" required>
+        <input type="text" id="prodImage" placeholder="Image URL" required>
+        <input type="text" id="prodDesc" placeholder="Description" required>
+        <button type="submit" class="btn btn-hero">Upload</button>
+      </form>
+    </section>
+    <section class="dashboard-section">
+      <h2 class="dashboard-title">Your Products</h2>
+      <div id="artisanProducts" class="product-grid"></div>
+    </section>
+    <section class="dashboard-section">
+      <h2 class="dashboard-title">Orders (Simulated)</h2>
+      <div id="orderList" class="order-list"></div>
+    </section>
+    <div id="debugPanel" style="display:none; background:#fee; color:#900; padding:10px; margin:10px 0; border:1px solid #900;"></div>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async function() {
+      if (!window.API || !API.helpers.isAuthenticated()) {
+        document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Please login to view dashboard</h2><a href="login.html" class="btn btn-primary">Login</a></div>';
+        return;
+      } else if (!API.helpers.isArtisan()) {
+        window.location.href = 'home.html';
+        return;
+      }
+      // Show loading
+      const grid = document.getElementById('artisanProducts');
+      grid.innerHTML = '<div class="loading">Loading products...</div>';
+      const debugPanel = document.getElementById('debugPanel');
+      debugPanel.style.display = 'none';
+      try {
+        const res = await API.artisan.getArtisanProducts();
+        if (res.success && res.data && res.data.products.length > 0) {
+          grid.innerHTML = '';
+          res.data.products.forEach((product, idx) => {
+            grid.innerHTML += `
+              <div class="product-card">
+                <img src="${product.images && product.images[0] ? product.images[0] : (product.image || 'images/placeholder.jpg')}" alt="${product.title}" class="product-img">
+                <div class="product-info">
+                  <h2 class="product-title">${product.title}</h2>
+                  <p class="product-price">₹${product.price}</p>
+                  <p class="product-desc">${product.description}</p>
+                  <div class="dashboard-actions">
+                    <button class="btn btn-primary" onclick="editProduct('${product._id}')">Edit</button>
+                    <button class="btn btn-outline" onclick="deleteProduct('${product._id}')">Delete</button>
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          grid.innerHTML = '<div class="no-products">No products uploaded yet.</div>';
+        }
+      } catch (err) {
+        grid.innerHTML = '<div class="error">Failed to load products from backend. Please check your connection.</div>';
+        debugPanel.style.display = 'block';
+        debugPanel.textContent = 'Backend error: ' + (err && err.message ? err.message : JSON.stringify(err));
+      }
+    });
+    // Use localStorage for artisan products
+    function getArtisanProducts() {
+      return JSON.parse(localStorage.getItem('artisanProducts') || '[]');
+    }
+    function setArtisanProducts(products) {
+      localStorage.setItem('artisanProducts', JSON.stringify(products));
+    }
+    function renderArtisanProducts() {
+      const products = getArtisanProducts();
+      const grid = document.getElementById('artisanProducts');
+      grid.innerHTML = '';
+      if (products.length === 0) {
+        grid.innerHTML = '<div class="no-products">No products uploaded yet.</div>';
+        return;
+      }
+      products.forEach((product, idx) => {
+        grid.innerHTML += `
+          <div class="product-card">
+            <img src="${product.images && product.images[0] ? product.images[0] : (product.image || 'images/placeholder.jpg')}" alt="${product.title}" class="product-img">
+            <div class="product-info">
+              <h2 class="product-title">${product.title}</h2>
+              <p class="product-price">₹${product.price}</p>
+              <p class="product-desc">${product.description}</p>
+              <div class="dashboard-actions">
+                <button class="btn btn-primary" onclick="editProduct(${idx})">Edit</button>
+                <button class="btn btn-outline" onclick="deleteProduct(${idx})">Delete</button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+    function editProduct(idx) {
+      const products = getArtisanProducts();
+      const product = products[idx];
+      document.getElementById('prodTitle').value = product.title;
+      document.getElementById('prodPrice').value = product.price;
+      document.getElementById('prodImage').value = product.image;
+      document.getElementById('prodDesc').value = product.description;
+      deleteProduct(idx);
+    }
+    function deleteProduct(idx) {
+      let products = getArtisanProducts();
+      products.splice(idx, 1);
+      setArtisanProducts(products);
+      renderArtisanProducts();
+    }
+    window.editProduct = editProduct;
+    window.deleteProduct = deleteProduct;
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const title = document.getElementById('prodTitle').value;
+      const price = document.getElementById('prodPrice').value;
+      const image = document.getElementById('prodImage').value;
+      const description = document.getElementById('prodDesc').value;
+      const products = getArtisanProducts();
+      products.push({ title, price, image, description });
+      setArtisanProducts(products);
+      renderArtisanProducts();
+      this.reset();
+    });
+    renderArtisanProducts();
+    // Simulated orders
+    const orders = [
+      {id: 101, product: 'Crochet Teddy Bear', buyer: 'SUBBAMMA', qty: 1, status: 'Placed'},
+      {id: 102, product: 'Boho Wall Hanging', buyer: 'RAMALAKSHMI', qty: 2, status: 'Placed'}
+    ];
+    function renderOrders() {
+      const list = document.getElementById('orderList');
+      if (orders.length === 0) {
+        list.innerHTML = '<div class="no-products">No orders yet.</div>';
+        return;
+      }
+      list.innerHTML = orders.map(order => `
+        <div class="order-item">
+          <span>Order #${order.id}</span>
+          <span>${order.product}</span>
+          <span>Buyer: ${order.buyer}</span>
+          <span>Qty: ${order.qty}</span>
+          <span class="order-status">${order.status}</span>
+        </div>
+      `).join('');
+    }
+    renderOrders();
+  </script>
+</body>
+</html> 

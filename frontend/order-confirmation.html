@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Confirmation - Crochet Arty</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="js/api.js"></script>
+</head>
+<body class="bg-gradient min-h-screen flex flex-col">
+  <nav class="navbar">
+    <span class="logo">Crochet Arty</span>
+    <div class="nav-links">
+      <a href="home.html">Home</a>
+      <a href="orders.html">Orders</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="confirmation-container">
+      <div class="confirmation-card">
+        <div class="success-icon">✅</div>
+        <h1 class="confirmation-title">Order Placed Successfully!</h1>
+        <p class="confirmation-message">Thank you for your order. We'll send you a confirmation email shortly.</p>
+        
+        <div id="orderDetails" class="order-summary">
+          <!-- Order details will be loaded here -->
+        </div>
+        
+        <div class="confirmation-actions">
+          <a href="orders.html" class="btn btn-primary">View My Orders</a>
+          <a href="home.html" class="btn btn-outline">Continue Shopping</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+
+
+  <script>
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', async function() {
+      if (!API.helpers.isAuthenticated()) {
+        showNotification('Please login to view order confirmation', 'info');
+        return;
+      }
+      
+      await loadOrderDetails();
+    });
+
+    // Get order ID from URL
+    function getOrderId() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('order');
+    }
+
+    // Load order details
+    async function loadOrderDetails() {
+      const orderId = getOrderId();
+      
+      if (!orderId) {
+        document.getElementById('orderDetails').innerHTML = '<p>Order ID not found.</p>';
+        return;
+      }
+
+      try {
+        const response = await API.orders.getOrder(orderId);
+        
+        if (response.success) {
+          renderOrderDetails(response.data.order);
+        } else {
+          document.getElementById('orderDetails').innerHTML = '<p>Failed to load order details.</p>';
+        }
+      } catch (error) {
+        console.error('Load order details error:', error);
+        document.getElementById('orderDetails').innerHTML = '<p>Failed to load order details.</p>';
+      }
+    }
+
+    // Render order details
+    function renderOrderDetails(order) {
+      const container = document.getElementById('orderDetails');
+      
+      container.innerHTML = `
+        <div class="order-info">
+          <h3>Order #${order.orderNumber}</h3>
+          <p><strong>Total Amount:</strong> ${API.helpers.formatPrice(order.totalAmount)}</p>
+          <p><strong>Payment Method:</strong> ${order.paymentMethod.toUpperCase()}</p>
+          <p><strong>Estimated Delivery:</strong> ${new Date(order.estimatedDelivery).toLocaleDateString()}</p>
+        </div>
+        
+        <div class="shipping-info">
+          <h4>Shipping Address</h4>
+          <p>${order.shippingAddress.name}</p>
+          <p>${order.shippingAddress.street}</p>
+          <p>${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.zipCode}</p>
+          <p>${order.shippingAddress.phone}</p>
+        </div>
+        
+        <div class="order-items">
+          <h4>Items Ordered</h4>
+          ${order.items.map(item => `
+            <div class="confirmation-item">
+              <img src="${item.product.images[0] || 'images/placeholder.jpg'}" alt="${item.product.title}" class="item-image">
+              <div class="item-details">
+                <span class="item-title">${item.product.title}</span>
+                <span class="item-qty">Quantity: ${item.quantity}</span>
+                <span class="item-price">${API.helpers.formatPrice(item.price)}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

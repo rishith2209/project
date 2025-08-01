@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Details - Crochet Arty</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="js/api.js"></script>
+</head>
+<body class="bg-gradient min-h-screen flex flex-col">
+  <nav class="navbar">
+    <span class="logo">Crochet Arty</span>
+    <div class="nav-links">
+      <a href="home.html">Home</a>
+      <a href="cart.html">Cart <span id="cartSummary" class="cart-count">0</span></a>
+      <a href="wishlist.html">Wishlist</a>
+      <a href="orders.html">Orders</a>
+      <a href="profile.html" id="profileLink" style="display: none;">Profile</a>
+      <a href="dashboard.html" id="dashboardLink" style="display: none;">Dashboard</a>
+      <a href="#" id="logoutLink" class="logout">Logout</a>
+    </div>
+  </nav>
+  <main class="main-content">
+    <div class="product-detail-main">
+      <div id="loadingState" class="loading-container">
+        <div class="loading">Loading product details...</div>
+      </div>
+      
+      <div id="errorState" class="error-container" style="display: none;">
+        <div class="error-message">
+          <h3>Product not found</h3>
+          <p>The product you're looking for doesn't exist or has been removed.</p>
+          <a href="home.html" class="btn btn-primary">Browse Products</a>
+        </div>
+      </div>
+      
+      <div id="productDetail" class="product-detail-container" style="display: none;">
+        <!-- Product details will be loaded here -->
+      </div>
+      
+      <!-- Reviews Section -->
+      <div id="reviewsSection" class="reviews-section" style="display: none;">
+        <h3 class="section-title">Customer Reviews</h3>
+        <div id="reviewsContainer">
+          <!-- Reviews will be loaded here -->
+        </div>
+      </div>
+    </div>
+  </main>
+
+
+  <script>
+    let currentProduct = null;
+    let isInWishlist = false;
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', async function() {
+      // Product page can be viewed without authentication
+      
+      await loadProduct();
+      setupNavigation();
+      updateCartSummary();
+    });
+
+    // Setup navigation
+    function setupNavigation() {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const profileLink = document.getElementById('profileLink');
+      const dashboardLink = document.getElementById('dashboardLink');
+      
+      if (user.id) {
+        profileLink.style.display = 'inline';
+        if (user.role === 'artisan' || user.role === 'admin') {
+          dashboardLink.style.display = 'inline';
+        }
+      }
+      
+      // Logout functionality
+      document.getElementById('logoutLink').addEventListener('click', async function(e) {
+        e.preventDefault();
+        await API.auth.logout();
+      });
+    }
+
+    // Get product ID from URL
+    function getProductId() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('id');
+    }
+
+    // Load product from API
+    async function loadProduct() {
+      const productId = getProductId();
+      
+      if (!productId) {
+        showError();
+        return;
+      }
+
+      try {
+        const response = await API.products.getProduct(productId);
+        
+        if (response.success) {
+          currentProduct = response.data.product;
+          await renderProduct();
+          await loadWishlistStatus();
+          await loadReviews();
+        } else {
+          showError();
+        }
+      } catch (error) {
+        console.error('Load product error:', error);
+        showError();
+      }
+    }
+
+    // Render product details
+    async function renderProduct() {
+      const loadingState = document.getElementById('loadingState');
+      const productDetail = document.getElementById('productDetail');
+      const reviewsSection = document.getElementById('reviewsSection');
+      
+      loadingState.style.display = 'none';
+      productDetail.style.display = 'block';
+      reviewsSection.style.display = 'block';
+
+      productDetail.innerHTML = `
+        <div class="product-detail-card">
+          <div class="product-images">
+            <img src="${currentProduct.images[0] || 'images/placeholder.jpg'}" 
+                 alt="${currentProduct.title}" class="product-detail-img">
+          </div>
+          
+          <div class="product-detail-info">
+            <div class="product-header">
+              <h1 class="product-title">${currentProduct.title}</h1>
+              <button class="wishlist-btn-large" onclick="toggleWishlist()" id="wishlistBtn" title="Add to wishlist">
+                ♡
+              </button>
+            </div>
+            
+            <div class="product-rating">
+              ${'★'.repeat(Math.floor(currentProduct.ratings.average))}${'☆'.repeat(5 - Math.floor(currentProduct.ratings.average))}
+              <span class="rating-count">(${currentProduct.ratings.count} reviews)</span>
+            </div>
+            
+            <p class="product-price">${API.helpers.formatPrice(currentProduct.price)}</p>
+            <span class="product-category">${currentProduct.category}</span>
+            
+            <div class="product-description">
+              <h3>Description</h3>
+              <p>${currentProduct.description}</p>
+            </div>
+            
+            ${currentProduct.materials && currentProduct.materials.length > 0 ? `
+              <div class="product-materials">
+                <h3>Materials</h3>
+                <div class="materials-list">
+                  ${currentProduct.materials.map(material => `<span class="material-tag">${material}</span>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${currentProduct.careInstructions ? `
+              <div class="product-care">
+                <h3>Care Instructions</h3>
+                <p>${currentProduct.careInstructions}</p>
+              </div>
+            ` : ''}
+            
+            <div class="product-stock">
+              <span class="stock-info ${currentProduct.stock > 0 ? 'in-stock' : 'out-of-stock'}">
+                ${currentProduct.stock > 0 ? `${currentProduct.stock} in stock` : 'Out of stock'}
+              </span>
+            </div>
+            
+            <div class="product-detail-actions">
+              <button class="btn btn-primary btn-large" 
+                      onclick="addToCart()" 
+                      ${currentProduct.stock === 0 ? 'disabled' : ''}>
+                Add to Cart
+              </button>
+              <button class="btn btn-secondary btn-large" 
+                      onclick="buyNow()" 
+                      ${currentProduct.stock === 0 ? 'disabled' : ''}>
+                Buy Now
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Load wishlist status
+    async function loadWishlistStatus() {
+      if (!API.helpers.isAuthenticated()) return;
+      
+      try {
+        const response = await API.wishlist.checkWishlist(currentProduct._id);
+        if (response.success) {
+          isInWishlist = response.data.isInWishlist;
+          updateWishlistButton();
+        }
+      } catch (error) {
+        console.error('Load wishlist status error:', error);
+      }
+    }
+
+    // Update wishlist button
+    function updateWishlistButton() {
+      const btn = document.getElementById('wishlistBtn');
+      if (btn) {
+        btn.textContent = isInWishlist ? '♥' : '♡';
+        btn.classList.toggle('in-wishlist', isInWishlist);
+        btn.title = isInWishlist ? 'Remove from wishlist' : 'Add to wishlist';
+      }
+    }
+
+    // Toggle wishlist
+    async function toggleWishlist() {
+      if (!API.helpers.isAuthenticated()) {
+        showNotification('Please login to manage your wishlist', 'info');
+        return;
+      }
+
+      try {
+        let response;
+        if (isInWishlist) {
+          response = await API.wishlist.removeFromWishlist(currentProduct._id);
+          if (response.success) {
+            isInWishlist = false;
+            showNotification('Removed from wishlist', 'success');
+          }
+        } else {
+          response = await API.wishlist.addToWishlist(currentProduct._id);
+          if (response.success) {
+            isInWishlist = true;
+            showNotification('Added to wishlist', 'success');
+          }
+        }
+        updateWishlistButton();
+      } catch (error) {
+        console.error('Toggle wishlist error:', error);
+        showNotification('Failed to update wishlist', 'error');
+      }
+    }
+
+    // Add to cart
+    async function addToCart() {
+      if (!API.helpers.isAuthenticated()) {
+        showNotification('Please login to add items to cart', 'info');
+        return;
+      }
+
+      try {
+        const response = await API.cart.addToCart(currentProduct._id, 1);
+        
+        if (response.success) {
+          showNotification('Product added to cart!', 'success');
+          updateCartSummary();
+        } else {
+          showNotification(response.message || 'Failed to add to cart', 'error');
+        }
+      } catch (error) {
+        console.error('Add to cart error:', error);
+        showNotification('Failed to add to cart', 'error');
+      }
+    }
+
+    // Buy now - redirect to cart then checkout
+    async function buyNow() {
+      if (!API.helpers.isAuthenticated()) {
+        showNotification('Please login to proceed with purchase', 'info');
+        return;
+      }
+
+      try {
+        // Add to cart first
+        const response = await API.cart.addToCart(currentProduct._id, 1);
+        
+        if (response.success) {
+          showNotification('Product added to cart! Redirecting to checkout...', 'success');
+          // Wait a bit for the notification to show, then redirect
+          setTimeout(() => {
+            window.location.href = 'checkout.html';
+          }, 1500);
+        } else {
+          showNotification(response.message || 'Failed to add to cart', 'error');
+        }
+      } catch (error) {
+        console.error('Buy now error:', error);
+        showNotification('Failed to process purchase. Please try again.', 'error');
+      }
+    }
+
+    // Load reviews
+    async function loadReviews() {
+      try {
+        const response = await API.reviews.getProductReviews(currentProduct._id, { limit: 5 });
+        
+        if (response.success) {
+          renderReviews(response.data.reviews);
+        }
+      } catch (error) {
+        console.error('Load reviews error:', error);
+      }
+    }
+
+    // Render reviews
+    function renderReviews(reviews) {
+      const container = document.getElementById('reviewsContainer');
+      
+      if (reviews.length === 0) {
+        container.innerHTML = '<p class="no-reviews">No reviews yet. Be the first to review this product!</p>';
+        return;
+      }
+
+      container.innerHTML = reviews.map(review => `
+        <div class="review-card">
+          <div class="review-header">
+            <div class="review-rating">
+              ${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}
+            </div>
+            <span class="review-date">${new Date(review.createdAt).toLocaleDateString()}</span>
+          </div>
+          <h4 class="review-title">${review.title}</h4>
+          <p class="review-comment">${review.comment}</p>
+          <div class="review-author">
+            <span>By ${review.customer.name}</span>
+            ${review.isVerified ? '<span class="verified-badge">Verified Purchase</span>' : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Show error state
+    function showError() {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('errorState').style.display = 'block';
+    }
+
+    // Update cart summary
+    async function updateCartSummary() {
+      if (!API.helpers.isAuthenticated()) return;
+
+      try {
+        const response = await API.cart.getCartSummary();
+        if (response.success) {
+          document.getElementById('cartSummary').textContent = response.data.totalItems || 0;
+        }
+      } catch (error) {
+        console.error('Failed to update cart summary:', error);
+      }
+    }
+
+    // Show notification
+    function showNotification(message, type = 'info') {
+      const notification = document.createElement('div');
+      notification.className = `notification notification-${type}`;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      setTimeout(() => notification.remove(), 3000);
+    }
+
+    // Expose functions globally
+    window.toggleWishlist = toggleWishlist;
+    window.addToCart = addToCart;
+    window.buyNow = buyNow;
+  </script>
+</body>
+</html> 

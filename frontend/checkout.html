@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout - Crochet Arty</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="js/api.js"></script>
+</head>
+<body class="bg-gradient min-h-screen flex flex-col">
+  <nav class="navbar">
+    <span class="logo">Crochet Arty</span>
+    <div class="nav-links">
+      <a href="home.html">Home</a>
+      <a href="cart.html">Cart</a>
+      <a href="wishlist.html">Wishlist</a>
+      <a href="orders.html">Orders</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="checkout-container">
+      <h1 class="section-title">Checkout</h1>
+      
+      <div class="checkout-content">
+        <!-- Order Summary -->
+        <div class="checkout-section">
+          <h2 class="checkout-section-title">Order Summary</h2>
+          <div id="orderSummary" class="order-summary-content">
+            <!-- Order items will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Shipping Address -->
+        <div class="checkout-section">
+          <h2 class="checkout-section-title">Shipping Address</h2>
+          <form id="checkoutForm" class="checkout-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="fullName">Full Name *</label>
+                <input type="text" id="fullName" name="fullName" required>
+              </div>
+              <div class="form-group">
+                <label for="phone">Phone Number *</label>
+                <input type="tel" id="phone" name="phone" required>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="street">Street Address *</label>
+              <textarea id="street" name="street" rows="2" required placeholder="House number, street name, area"></textarea>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="city">City *</label>
+                <input type="text" id="city" name="city" required>
+              </div>
+              <div class="form-group">
+                <label for="state">State *</label>
+                <input type="text" id="state" name="state" required>
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="zipCode">ZIP Code *</label>
+                <input type="text" id="zipCode" name="zipCode" pattern="[0-9]{6}" required>
+              </div>
+              <div class="form-group">
+                <label for="country">Country</label>
+                <input type="text" id="country" name="country" value="India" readonly>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Payment Method -->
+        <div class="checkout-section">
+          <h2 class="checkout-section-title">Payment Method</h2>
+          <div class="payment-methods">
+            <label class="payment-option">
+              <input type="radio" name="paymentMethod" value="cod" checked>
+              <span class="payment-label">
+                <strong>Cash on Delivery</strong>
+                <small>Pay when you receive your order</small>
+              </span>
+            </label>
+            
+            <label class="payment-option">
+              <input type="radio" name="paymentMethod" value="upi">
+              <span class="payment-label">
+                <strong>UPI Payment</strong>
+                <small>Pay using UPI apps like GPay, PhonePe</small>
+              </span>
+            </label>
+            
+            <label class="payment-option">
+              <input type="radio" name="paymentMethod" value="card">
+              <span class="payment-label">
+                <strong>Credit/Debit Card</strong>
+                <small>Secure card payment</small>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Order Notes -->
+        <div class="checkout-section">
+          <h2 class="checkout-section-title">Order Notes (Optional)</h2>
+          <textarea id="orderNotes" placeholder="Any special instructions for your order..." rows="3"></textarea>
+        </div>
+
+        <!-- Place Order -->
+        <div class="checkout-section">
+          <div class="order-total-section">
+            <div class="total-breakdown">
+              <div class="total-row">
+                <span>Subtotal:</span>
+                <span id="subtotal">₹0.00</span>
+              </div>
+              <div class="total-row">
+                <span>Shipping:</span>
+                <span id="shipping">Free</span>
+              </div>
+              <div class="total-row total-final">
+                <span>Total:</span>
+                <span id="finalTotal">₹0.00</span>
+              </div>
+            </div>
+            
+            <button type="button" id="placeOrderBtn" class="btn btn-primary btn-large">
+              Place Order
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">&copy; 2024 Crochet Arty. All rights reserved.</footer>
+
+  <script>
+    let cartData = null;
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', async function() {
+      if (!API.helpers.isAuthenticated()) {
+        showNotification('Please login to proceed with checkout', 'info');
+        return;
+      }
+      
+      await loadCartData();
+      setupEventListeners();
+      loadUserProfile();
+    });
+
+    // Load cart data
+    async function loadCartData() {
+      try {
+        const response = await API.cart.getCart();
+        
+        if (response.success) {
+          cartData = response.data.cart;
+          
+          if (!cartData || cartData.items.length === 0) {
+            window.location.href = 'cart.html';
+            return;
+          }
+          
+          renderOrderSummary();
+          updateTotals();
+        } else {
+          showError('Failed to load cart data');
+          setTimeout(() => window.location.href = 'cart.html', 2000);
+        }
+      } catch (error) {
+        console.error('Load cart error:', error);
+        showError('Failed to load cart data');
+        setTimeout(() => window.location.href = 'cart.html', 2000);
+      }
+    }
+
+    // Load user profile for pre-filling form
+    async function loadUserProfile() {
+      try {
+        const response = await API.auth.getProfile();
+        
+        if (response.success) {
+          const user = response.data.user;
+          
+          // Pre-fill form with user data
+          if (user.name) document.getElementById('fullName').value = user.name;
+          if (user.phone) document.getElementById('phone').value = user.phone;
+          if (user.address) {
+            if (user.address.street) document.getElementById('street').value = user.address.street;
+            if (user.address.city) document.getElementById('city').value = user.address.city;
+            if (user.address.state) document.getElementById('state').value = user.address.state;
+            if (user.address.zipCode) document.getElementById('zipCode').value = user.address.zipCode;
+            if (user.address.country) document.getElementById('country').value = user.address.country;
+          }
+        }
+      } catch (error) {
+        console.error('Load profile error:', error);
+      }
+    }
+
+    // Setup event listeners
+    function setupEventListeners() {
+      document.getElementById('placeOrderBtn').addEventListener('click', placeOrder);
+      
+      // Form validation
+      const form = document.getElementById('checkoutForm');
+      form.addEventListener('input', validateForm);
+    }
+
+    // Render order summary
+    function renderOrderSummary() {
+      const container = document.getElementById('orderSummary');
+      
+      container.innerHTML = `
+        <div class="order-items">
+          ${cartData.items.map(item => `
+            <div class="checkout-item">
+              <img src="${item.product.images[0] || 'images/placeholder.jpg'}" alt="${item.product.title}" class="checkout-item-img">
+              <div class="checkout-item-info">
+                <h4>${item.product.title}</h4>
+                <p class="item-category">${item.product.category}</p>
+                <div class="item-pricing">
+                  <span class="item-price">${API.helpers.formatPrice(item.price)}</span>
+                  <span class="item-qty">× ${item.quantity}</span>
+                  <span class="item-total">${API.helpers.formatPrice(item.price * item.quantity)}</span>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    // Update totals
+    function updateTotals() {
+      const subtotal = cartData.totalAmount;
+      const shipping = 0; // Free shipping
+      const total = subtotal + shipping;
+      
+      document.getElementById('subtotal').textContent = API.helpers.formatPrice(subtotal);
+      document.getElementById('shipping').textContent = shipping === 0 ? 'Free' : API.helpers.formatPrice(shipping);
+      document.getElementById('finalTotal').textContent = API.helpers.formatPrice(total);
+    }
+
+    // Validate form
+    function validateForm() {
+      const form = document.getElementById('checkoutForm');
+      const placeOrderBtn = document.getElementById('placeOrderBtn');
+      
+      const isValid = form.checkValidity();
+      placeOrderBtn.disabled = !isValid;
+      
+      if (isValid) {
+        placeOrderBtn.classList.remove('btn-disabled');
+      } else {
+        placeOrderBtn.classList.add('btn-disabled');
+      }
+    }
+
+    // Place order
+    async function placeOrder() {
+      const form = document.getElementById('checkoutForm');
+      
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      const formData = new FormData(form);
+      const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+      const orderNotes = document.getElementById('orderNotes').value.trim();
+
+      const orderData = {
+        shippingAddress: {
+          name: formData.get('fullName'),
+          phone: formData.get('phone'),
+          street: formData.get('street'),
+          city: formData.get('city'),
+          state: formData.get('state'),
+          zipCode: formData.get('zipCode'),
+          country: formData.get('country')
+        },
+        paymentMethod: paymentMethod,
+        notes: orderNotes
+      };
+
+      try {
+        // Disable button and show loading
+        const placeOrderBtn = document.getElementById('placeOrderBtn');
+        placeOrderBtn.disabled = true;
+        placeOrderBtn.textContent = 'Placing Order...';
+
+        const response = await API.orders.createOrder(orderData);
+        
+        if (response.success) {
+          showNotification('Order placed successfully!', 'success');
+          
+          // Redirect to order confirmation
+          setTimeout(() => {
+            window.location.href = `order-confirmation.html?order=${response.data.order._id}`;
+          }, 1500);
+        } else {
+          throw new Error(response.message || 'Failed to place order');
+        }
+      } catch (error) {
+        console.error('Place order error:', error);
+        showError(error.message || 'Failed to place order');
+        
+        // Re-enable button
+        const placeOrderBtn = document.getElementById('placeOrderBtn');
+        placeOrderBtn.disabled = false;
+        placeOrderBtn.textContent = 'Place Order';
+      }
+    }
+
+    // Show error
+    function showError(message) {
+      showNotification(message, 'error');
+    }
+
+    // Show notification
+    function showNotification(message, type = 'info') {
+      const notification = document.createElement('div');
+      notification.className = `notification notification-${type}`;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      setTimeout(() => notification.remove(), 4000);
+    }
+  </script>
+</body>
+</html>
