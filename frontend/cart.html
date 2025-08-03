@@ -48,7 +48,6 @@
     </div>
     <div id="modalOverlay" class="modal-overlay" style="display:none;"></div>
   </main>
-  <footer class="footer">&copy; 2024 Crochet Arty. All rights reserved.</footer>
   
   <script>
     let cartData = null;
@@ -111,13 +110,16 @@
             <div class="cart-item-actions">
               <label>Qty:</label>
               <input type="number" min="1" max="99" value="${item.quantity}" class="cart-qty" 
-                     onchange="updateQuantity('${product._id}', this.value)">
-              <button class="btn btn-outline" onclick="removeFromCart('${product._id}')">Remove</button>
+                     data-product-id="${product._id}">
+              <button class="btn btn-outline remove-btn" data-product-id="${product._id}">Remove</button>
             </div>
           </div>
         `;
         itemsDiv.appendChild(itemDiv);
       });
+
+      // Add event listeners for quantity changes and remove buttons
+      setupCartEventListeners();
 
       // Render summary
       summaryDiv.innerHTML = `
@@ -132,14 +134,36 @@
       `;
     }
 
+    // Setup event listeners for cart items
+    function setupCartEventListeners() {
+      // Quantity change listeners
+      document.querySelectorAll('.cart-qty').forEach(input => {
+        input.addEventListener('change', function() {
+          const productId = this.getAttribute('data-product-id');
+          const quantity = parseInt(this.value);
+          updateQuantity(productId, quantity);
+        });
+      });
+
+      // Remove button listeners
+      document.querySelectorAll('.remove-btn').forEach(button => {
+        button.addEventListener('click', function() {
+          const productId = this.getAttribute('data-product-id');
+          removeFromCart(productId);
+        });
+      });
+    }
+
     // Update quantity
     async function updateQuantity(productId, quantity) {
       try {
-        const response = await API.cart.updateCartItem(productId, parseInt(quantity));
+        console.log('Updating quantity for product:', productId, 'to:', quantity);
+        const response = await API.cart.updateCartItem(productId, quantity);
         
         if (response.success) {
           cartData = response.data.cart;
           renderCart();
+          showSuccess('Quantity updated successfully.');
         } else {
           showError('Failed to update quantity.');
         }
@@ -152,6 +176,7 @@
     // Remove from cart
     async function removeFromCart(productId) {
       try {
+        console.log('Removing product from cart:', productId);
         const response = await API.cart.removeFromCart(productId);
         
         if (response.success) {
@@ -197,152 +222,58 @@
       window.location.href = 'checkout.html';
     }
 
-    // Start buy now process (legacy)
-    function startBuyNow() {
-      proceedToCheckout();
-    }
-
-    // Setup event listeners
+    // Setup general event listeners
     function setupEventListeners() {
-      // Continue to return policy
-      document.getElementById('continueToReturn').addEventListener('click', function() {
-        document.getElementById('modalStep1').style.display = 'none';
-        document.getElementById('modalStep2').style.display = 'block';
-      });
+      // Logout functionality
+      const logoutLink = document.getElementById('logoutLink');
+      if (logoutLink) {
+        logoutLink.addEventListener('click', async function(e) {
+          e.preventDefault();
+          try {
+            await API.auth.logout();
+          } catch (error) {
+            console.error('Logout error:', error);
+          }
+        });
+      }
 
-      // Accept return policy
-      document.getElementById('acceptReturnPolicy').addEventListener('click', function() {
-        document.getElementById('modalStep2').style.display = 'none';
-        document.getElementById('modalStep3').style.display = 'block';
-        renderOrderSummary();
-      });
-
-      // Place order
-      document.getElementById('placeOrder').addEventListener('click', function() {
-        placeOrder();
-      });
-
-      // Modal overlay click
-      document.getElementById('modalOverlay').addEventListener('click', function() {
-        closeModal();
-      });
-
-      // Logout
-      document.getElementById('logoutLink').addEventListener('click', async function(e) {
-        e.preventDefault();
-        try {
-          await API.auth.logout();
-        } catch (error) {
-          console.error('Logout error:', error);
-        }
-      });
-
-      // Setup navigation
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      // Profile navigation
+      const profileNav = document.getElementById('profileNav');
       const dashboardLink = document.getElementById('dashboardLink');
       
-      if (user.role === 'artisan' || user.role === 'admin') {
-        dashboardLink.style.display = 'inline';
-      }
-    }
-
-    // Render order summary
-    function renderOrderSummary() {
-      const orderSummary = document.getElementById('orderSummary');
-      const address = document.getElementById('addressInput').value;
-      
-      let summaryHTML = '<div class="order-items">';
-      cartData.items.forEach(item => {
-        summaryHTML += `
-          <div class="order-item">
-            <span>${item.product.title} x ${item.quantity}</span>
-            <span>${API.helpers.formatPrice(item.price * item.quantity)}</span>
-          </div>
-        `;
-      });
-      summaryHTML += '</div>';
-      summaryHTML += `<div class="order-total">Total: ${API.helpers.formatPrice(cartData.totalAmount)}</div>`;
-      summaryHTML += `<div class="order-address">Delivery Address: ${address}</div>`;
-      
-      orderSummary.innerHTML = summaryHTML;
-    }
-
-    // Place order
-    async function placeOrder() {
-      const address = document.getElementById('addressInput').value;
-      if (!address.trim()) {
-        showError('Please enter a delivery address.');
-        return;
-      }
-      try {
-        // Prepare order data
-        const orderData = {
-          items: cartData.items.map(item => ({
-            product: item.product._id,
-            quantity: item.quantity
-          })),
-          address
-        };
-        // Call backend order API
-        const res = await API.orders.createOrder(orderData);
-        if (res.success) {
-          showSuccess('Order placed successfully!');
-          closeModal();
-          // Clear cart after successful order
-          await API.cart.clearCart();
-          cartData = { items: [], totalAmount: 0, totalItems: 0 };
-          renderCart();
-        } else {
-          showError(res.message || 'Failed to place order.');
+      if (API.helpers.isAuthenticated()) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (profileNav) profileNav.style.display = 'inline';
+        if (user.role === 'artisan' || user.role === 'admin') {
+          if (dashboardLink) dashboardLink.style.display = 'inline';
         }
-      } catch (error) {
-        console.error('Place order error:', error);
-        showError('Failed to place order. Please try again.');
       }
     }
 
-    // Close modal
-    function closeModal() {
-      document.getElementById('buyModal').style.display = 'none';
-      document.getElementById('modalOverlay').style.display = 'none';
-      document.getElementById('modalStep1').style.display = 'none';
-      document.getElementById('modalStep2').style.display = 'none';
-      document.getElementById('modalStep3').style.display = 'none';
+    // Show notification
+    function showNotification(message, type = 'info') {
+      const notification = document.createElement('div');
+      notification.className = `notification notification-${type}`;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.remove();
+      }, 3000);
     }
 
     // Show error message
     function showError(message) {
-      const notification = document.createElement('div');
-      notification.className = 'notification notification-error';
-      notification.textContent = message;
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.remove();
-      }, 3000);
+      showNotification(message, 'error');
     }
 
     // Show success message
     function showSuccess(message) {
-      const notification = document.createElement('div');
-      notification.className = 'notification notification-success';
-      notification.textContent = message;
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.remove();
-      }, 3000);
+      showNotification(message, 'success');
     }
 
     // Initialize when DOM is loaded
     document.addEventListener('DOMContentLoaded', initializeCart);
-  </script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      if (!window.API || !API.helpers.isAuthenticated()) {
-        console.log('Cart requires authentication - user can login manually');
-      }
-    });
   </script>
 </body>
 </html> 

@@ -1,7 +1,7 @@
 // API Service for Crochet ArtY Frontend-Backend Integration
 
 // Fixed API configuration - backend runs on port 5000
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://backend-9ppr.onrender.com/api';
 
 // Utility functions
 const getAuthToken = () => localStorage.getItem('token');
@@ -14,7 +14,7 @@ async function checkApiConnection() {
   
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // Increased timeout to 10s
     
     const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
@@ -47,9 +47,10 @@ async function checkApiConnection() {
 }
 
 // API request helper with improved error handling and retry logic
-async function apiRequest(endpoint, options = {}) {
+async function apiRequest(endpoint, options = {}, retryCount = 0) {
   const url = `${API_BASE_URL}${endpoint}`;
   const token = getAuthToken();
+  const maxRetries = 3;
   
   const config = {
     headers: {
@@ -104,7 +105,7 @@ async function apiRequest(endpoint, options = {}) {
   } catch (error) {
     console.error('❌ API Error:', error);
     
-    // Handle network errors
+    // Handle network errors with retry logic
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       console.error('🌐 Network error - checking API connection');
       // Try to reconnect to API
@@ -112,6 +113,17 @@ async function apiRequest(endpoint, options = {}) {
       if (!reconnected) {
         throw new Error('Backend server is not available. Please ensure the server is running on port 5000.');
       }
+    }
+    
+    // Retry logic for transient errors
+    if (retryCount < maxRetries && (
+      error.message.includes('fetch') || 
+      error.message.includes('network') ||
+      error.message.includes('timeout')
+    )) {
+      console.log(`🔄 Retrying request (${retryCount + 1}/${maxRetries})...`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+      return apiRequest(endpoint, options, retryCount + 1);
     }
     
     throw error;
@@ -575,12 +587,9 @@ let apiHealthCheckInterval;
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 Initializing API...');
   
-  // Add a small delay to ensure backend is fully ready
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
   // Check API connection with retry logic
   let apiConnected = false;
-  let retries = 3;
+  let retries = 5; // Increased retries
   
   while (!apiConnected && retries > 0) {
     apiConnected = await checkApiConnection();
@@ -589,7 +598,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.log(`⏳ Retrying connection... (${retries} attempts left)`);
       retries--;
       if (retries > 0) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Exponential backoff: 1s, 2s, 4s, 8s
+        const delay = Math.pow(2, 5 - retries) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
